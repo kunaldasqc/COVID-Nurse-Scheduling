@@ -1,0 +1,95 @@
+Created on Tue Jul  7 10:36:44 2020
+
+@author: KUNAL
+"""
+from dwave_qbsolv import QBSolv
+import networkx as nx
+from collections import defaultdict
+from dwave.system import DWaveSampler,EmbeddingComposite
+import dwave.inspector
+from dwave.system import FixedEmbeddingComposite
+from dwave.system import LeapHybridSampler
+import dimod
+from dimod import BinaryQuadraticModel
+
+n_N=5
+n_D=7
+n_S=28
+size= n_N*n_S
+chainstrength=100
+#G=nx.Graph()
+#G.add_edges_from([(0,4),(0,5),(1,2),(1,6),(2,4),(3,7),(5,6),(6,7)])
+Q=defaultdict(int)
+lagrage= 5
+def get_index(nurse_index,shift_index):
+
+    return nurse_index *  n_S + shift_index
+
+# Inverse of get_index - given a composite index in a 1D list, return the
+
+# nurse_index and day_index
+
+def get_nurse_and_day_and_shift(index):
+
+    nurse_index, shift_index = divmod(index, n_S)
+    return nurse_index, shift_index
+
+
+#Contraint
+for i in range(n_N):
+    for s in range(n_S):
+        ind=get_index(i,s)
+        Q[(ind,ind)] += -5*lagrage
+        for j in range(i+1,n_N):
+            indj=get_index(j,s)
+            Q[(ind,indj)] += 2*lagrage
+
+#Objective 
+for i in range(n_N):
+    for s in range(n_S):
+        ind=get_index(i,s)
+        for j in range(i+1,n_N):
+            indj=get_index(j,s)
+            Q[(ind,indj)] += -1
+            
+            
+
+            
+            
+'''sampler =EmbeddingComposite(DWaveSampler())
+response =sampler.sample_qubo(Q, chain_strength=chainstrength, num_reads=100)'''
+bqm = BinaryQuadraticModel.from_qubo(Q, 9*lagrage)
+sampler = LeapHybridSampler()
+response = sampler.sample(bqm)
+print(response)
+samples = response.first.sample
+energy = response.first.energy
+
+
+
+print("Size ", size)
+print("Energy ", energy)
+print(samples)
+
+# Graphics
+for x in range(n_S):
+    print() 
+    sched = [get_nurse_and_day_and_shift(j) for j in range(size) if samples[j] == 1]
+    str_header_for_output1 = "Day: "
+    str_header_for_output1 += " " * 6
+    str_header_for_output1 += "             ".join(map(str, range(n_D)))
+    
+    print(str_header_for_output1)
+    
+    str_header_for_output = "Shift: "
+    str_header_for_output += " " * 4
+    str_header_for_output += "  ".join(map(str, range(n_S)))
+    print(str_header_for_output)
+    for n in range(n_N):
+        str_row = ""
+        for d in range(n_S):
+            outcome = "X" if (n, d) in sched else " "
+            if d > 9:
+                outcome += " "
+            str_row += "  " + outcome
+        print("Nurse ", n, str_row)
